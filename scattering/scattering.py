@@ -14,21 +14,25 @@ from scattering.utils.constants import get_form_factor
 
 
 def find_element(name, top):
+    """Find the element symbol given the name of the atom and the top file."""
     for atom in top.atoms:
-        if atom.name==name:
+        if atom.name == name:
             return atom.element.symbol
 
+
 def find_atomic_number(name, top):
+    """Find the atomic number given the name of the atom and the top file."""
     for atom in top.atoms:
-        if atom.name==name:
+        if atom.name == name:
             return atom.element.number
 
 
 class Atominfo:
+    """Class to save the properties of an atom."""
     def __init__(self, name, element, atomic_number):
         self.name = name
         self.symbol = element
-        self.atomic_number=atomic_number
+        self.atomic_number = atomic_number
 
 
 def structure_factor(
@@ -90,18 +94,22 @@ def structure_factor(
     L = np.min(trj.unitcell_lengths)
 
     top = trj.topology
-    unique_residues=[]
+    unique_residues = []
 
     for a in top.residues:
         if a.name not in unique_residues:
             unique_residues.append(a.name)
-            residue_atoms=[]
+            residue_atoms = []
             for b in a.atoms:
                 residue_atoms.append(b.name)
-            print("The residue name is {} and it contains {}".format(a.name,residue_atoms))
-        
+            print(
+                "The residue name is {} and it contains {}".format(
+                    a.name, residue_atoms
+                )
+            )
+
     elements = set([a.element for a in top.atoms])
-    names=set([a.name for a in top.atoms])
+    names = set([a.name for a in top.atoms])
     compositions = dict()
     sq = dict()
 
@@ -109,17 +117,15 @@ def structure_factor(
     S = np.zeros(shape=(len(Q)))
 
     for name in names:
-        compositions[name] = (
-            len(top.select("name {}".format(name))) / trj.n_atoms
-        )
+        compositions[name] = len(top.select("name {}".format(name))) / trj.n_atoms
 
     # Compute partial structure factors
     print("Computing structure factors ...")
-    
-    atoms=set()
+
+    atoms = set()
     for name in names:
-        element=find_element(name,top)
-        atomic_number=find_atomic_number(name,top)
+        element = find_element(name, top)
+        atomic_number = find_atomic_number(name, top)
         atoms.add(Atominfo(name, element, atomic_number))
 
     for (atom1, atom2) in it.product(atoms, repeat=2):
@@ -155,8 +161,8 @@ def structure_factor(
         for (atom1, atom2) in it.product(atoms, repeat=2):
             e1 = atom1.symbol
             e2 = atom2.symbol
-            name1=atom1.name
-            name2=atom2.name
+            name1 = atom1.name
+            name2 = atom2.name
             f_a = get_form_factor(e1, q=q / 10, method=form)
             f_b = get_form_factor(e2, q=q / 10, method=form)
 
