@@ -13,6 +13,24 @@ from scattering.utils.constants import get_form_factor
 # __all__ = ['structure_factor', 'compute_partial_van_hove', 'compute_van_hove']
 
 
+def find_element(name, top):
+    for atom in top.atoms:
+        if atom.name==name:
+            return atom.element.symbol
+
+def find_atomic_number(name, top):
+    for atom in top.atoms:
+        if atom.name==name:
+            return atom.element.number
+
+
+class Atominfo:
+    def __init__(self, name, element, atomic_number):
+        self.name = name
+        self.symbol = element
+        self.atomic_number=atomic_number
+
+
 def structure_factor(
     trj,
     Q_range=(0.5, 50),
@@ -72,29 +90,46 @@ def structure_factor(
     L = np.min(trj.unitcell_lengths)
 
     top = trj.topology
-    elements = set([a.element for a in top.atoms])
+    unique_residues=[]
 
+    for a in top.residues:
+        if a.name not in unique_residues:
+            unique_residues.append(a.name)
+            residue_atoms=[]
+            for b in a.atoms:
+                residue_atoms.append(b.name)
+            print("The residue name is {} and it contains {}".format(a.name,residue_atoms))
+        
+    elements = set([a.element for a in top.atoms])
+    names=set([a.name for a in top.atoms])
     compositions = dict()
     sq = dict()
 
     Q = np.logspace(np.log10(Q_range[0]), np.log10(Q_range[1]), num=n_points)
     S = np.zeros(shape=(len(Q)))
 
-    for elem in elements:
-        compositions[elem.symbol] = (
-            len(top.select("element {}".format(elem.symbol))) / trj.n_atoms
+    for name in names:
+        compositions[name] = (
+            len(top.select("name {}".format(name))) / trj.n_atoms
         )
 
     # Compute partial structure factors
     print("Computing structure factors ...")
-    for (elem1, elem2) in it.product(elements, repeat=2):
-        e1 = elem1.symbol
-        e2 = elem2.symbol
+    
+    atoms=set()
+    for name in names:
+        element=find_element(name,top)
+        atomic_number=find_atomic_number(name,top)
+        atoms.add(Atominfo(name, element, atomic_number))
 
-        sq["{0}{1}".format(e1, e2)] = partial_structure_factor(
+    for (atom1, atom2) in it.product(atoms, repeat=2):
+        name1 = atom1.name
+        name2 = atom2.name
+
+        sq["{0}{1}".format(name1, name2)] = partial_structure_factor(
             trj=trj,
-            selection1=f"element {e1}",
-            selection2=f"element {e2}",
+            selection1=f"name {name1}",
+            selection2=f"name {name2}",
             Q_range=Q_range,
             L=L,
             n_points=n_points,
@@ -107,27 +142,28 @@ def structure_factor(
         num = 0
         denom = 0
 
-        for elem in elements:
+        for atom in atoms:
             denom += _get_normalize(
                 method=weighting_factor,
-                c=compositions[elem.symbol],
-                f=get_form_factor(elem.symbol, q=q / 10, method=form),
+                c=compositions[atom.name],
+                f=get_form_factor(atom.symbol, q=q / 10, method=form),
             )
 
         if weighting_factor == "fz":
             denom = denom ** 2
 
-        for (elem1, elem2) in it.product(elements, repeat=2):
-            e1 = elem1.symbol
-            e2 = elem2.symbol
-
+        for (atom1, atom2) in it.product(atoms, repeat=2):
+            e1 = atom1.symbol
+            e2 = atom2.symbol
+            name1=atom1.name
+            name2=atom2.name
             f_a = get_form_factor(e1, q=q / 10, method=form)
             f_b = get_form_factor(e2, q=q / 10, method=form)
 
-            x_a = compositions[e1]
-            x_b = compositions[e2]
+            x_a = compositions[name1]
+            x_b = compositions[name2]
 
-            integral = sq[f"{e1}{e2}"][i]
+            integral = sq[f"{name1}{name2}"][i]
 
             coefficient = x_a * x_b * f_a * f_b
             pre_factor = 4 * np.pi * rho
@@ -137,10 +173,10 @@ def structure_factor(
 
             if partial:
                 try:
-                    norm_sq[(e1, e2)][i] = (partial_sq * coefficient) / denom
+                    norm_sq[(name1, name2)][i] = (partial_sq * coefficient) / denom
                 except:
-                    norm_sq[(e1, e2)] = np.zeros((len(Q)))
-                    norm_sq[(e1, e2)][i] = (partial_sq * coefficient) / denom
+                    norm_sq[(name1, name2)] = np.zeros((len(Q)))
+                    norm_sq[(name1, name2)][i] = (partial_sq * coefficient) / denom
 
         S[i] = num / denom
 
